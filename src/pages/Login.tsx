@@ -52,7 +52,7 @@ export default function Login() {
     alert(`Login successful with email: ${data.email}`);
     
     // 3. Tự động điều hướng khi thành công
-    navigate('/dashboard'); // Giả sử bạn có trang /dashboard
+    navigate('/dashboard'); // 
   };
 
   return (
