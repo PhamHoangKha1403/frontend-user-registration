@@ -1,7 +1,13 @@
 import { useForm } from 'react-hook-form';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useMutation } from '@tanstack/react-query';
+import axios from 'axios'; 
+
+import { axiosInstance } from '@/api/axiosInstance.ts';
+import { useAuth } from '@/context/AuthContext.tsx'; 
+import { setRefreshToken } from '@/utils/tokenStore.ts'; 
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,8 +42,13 @@ type FormData = z.infer<typeof formSchema>;
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth(); // <--- 4. Lấy hàm login từ Context
 
-  // 2. Kết nối Zod với react-hook-form
+  // Lấy trang trước đó (nếu có) để điều hướng về
+  const from = location.state?.from?.pathname || '/dashboard';
+
+  //  Kết nối Zod với react-hook-form
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,13 +57,35 @@ export default function Login() {
     },
   });
 
+  //  Tạo Mutation (React Query) để gọi API thật
+  const mutation = useMutation({
+    mutationFn: (loginData: FormData) => {
+      return axiosInstance.post('/auth/login', loginData);
+    },
+    onSuccess: (response) => {
+      // --- XỬ LÝ KHI LOGIN THÀNH CÔNG ---
+      const { user, accessToken, refreshToken } = response.data; 
+
+      login(user, accessToken);
+
+      setRefreshToken(refreshToken);
+
+      navigate(from, { replace: true });
+    },
+    onError: (error: any) => {
+  
+      let message = 'Login failed. Please try again.';
+      if (axios.isAxiosError(error) && error.response) {
+        message = error.response.data.message || 'Invalid email or password';
+      }
+      alert(`Login Failed: ${message}`);
+      form.setError('root', { message });
+    },
+  });
+
+  // 11. Hàm OnSubmit (RHF)
   const onSubmit = (data: FormData) => {
-    // Tạm thời log ra, ở đây bạn sẽ gọi API
-    console.log('Login data:', data);
-    alert(`Login successful with email: ${data.email}`);
-    
-    // 3. Tự động điều hướng khi thành công
-    navigate('/dashboard'); // 
+    mutation.mutate(data); // Chạy mutation
   };
 
   return (
@@ -67,6 +100,13 @@ export default function Login() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Hiển thị lỗi chung (nếu có) */}
+              {form.formState.errors.root && (
+                <p className="text-sm font-medium text-destructive">
+                  {form.formState.errors.root.message}
+                </p>
+              )}
+
               <FormField
                 control={form.control}
                 name="email"
@@ -93,8 +133,13 @@ export default function Login() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full">
-                Login
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={mutation.isPending}
+              >
+                {mutation.isPending ? 'Logging in...' : 'Login'}
               </Button>
             </form>
           </Form>

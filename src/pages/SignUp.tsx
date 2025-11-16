@@ -1,10 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 import { useForm } from 'react-hook-form';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { axiosInstance } from '../api/axiosInstance.ts'; // <--- Dùng axiosInstance
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,11 +37,6 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>;
 
-const registerUser = async (data: FormData) => {
-  const response = await axios.post(`${API_URL}/user/register`, data);
-  return response.data;
-};
-
 export default function SignUp() {
   const navigate = useNavigate();
 
@@ -55,22 +50,23 @@ export default function SignUp() {
   });
 
   const mutation = useMutation({
-    mutationFn: registerUser,
+    
+    mutationFn: (data: FormData) => {
+      return axiosInstance.post('/user/register', data);
+    },
     onSuccess: () => {
-      // 3. Thay alert bằng điều hướng và (lý tưởng nhất) là một toast message
-      // Ví dụ: toast.success('Registration successful!')
-      alert('Registration successful!');
+      alert('Registration successful! Please login.');
       navigate('/login');
     },
     onError: (error: any) => {
+      // 4. Cập nhật xử lý lỗi
+      let message = 'Registration failed. Please try again.';
       if (axios.isAxiosError(error) && error.response) {
-      // 2. Lấy message từ data của backend
-      const backendMessage = error.response.data.message;
-      alert(`Registration Failed: ${backendMessage}`);
-    } else {
-      // 3. Fallback cho các lỗi khác
-      alert(`Registration Failed: ${error.message}`);
-    }
+        // Lỗi từ backend (ví dụ: email trùng)
+        message = error.response.data.message || 'An error occurred';
+      }
+      alert(`Registration Failed: ${message}`);
+      form.setError('root', { message });
     },
   });
 
@@ -88,6 +84,12 @@ export default function SignUp() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {/* Hiển thị lỗi chung (nếu có) */}
+              {form.formState.errors.root && (
+                <p className="text-sm font-medium text-destructive">
+                  {form.formState.errors.root.message}
+                </p>
+              )}
               <FormField
                 control={form.control}
                 name="email"
