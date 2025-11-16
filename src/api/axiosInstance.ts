@@ -1,6 +1,8 @@
 import axios, {
   AxiosHeaders,
+  type AxiosError,
   type AxiosRequestHeaders,
+  type AxiosResponse,
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { getRefreshToken, setRefreshToken } from '@/utils/tokenStore.ts';
@@ -31,8 +33,11 @@ const setAuthorizationHeader = (headers: AxiosHeaders, token: string) => {
 // --- Cấu hình Axios ---
 
 // 1. Tạo một instance Axios
+const apiBaseUrl =
+  import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+
 export const axiosInstance = axios.create({
-  baseURL: 'http://localhost:3000',
+  baseURL: apiBaseUrl,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -76,7 +81,7 @@ axiosInstance.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
+  (error: unknown) => {
     return Promise.reject(error);
   },
 );
@@ -100,11 +105,15 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 axiosInstance.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     return response;
   },
-  async (error) => {
-    const originalRequest: CustomAxiosRequestConfig = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as CustomAxiosRequestConfig | undefined;
+
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
 
     // Chỉ xử lý lỗi 401 (Unauthorized)
     // Và request này chưa được retry (_retry)
